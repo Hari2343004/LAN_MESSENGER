@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LAN Messenger</title>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 20px;
+            background: #f0f2f5;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        #chat {
+            height: 250px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            background: white;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        input, button {
+            padding: 8px;
+            margin: 5px 0;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        #files {
+            margin-top: 15px;
+            background: white;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>💬 LAN Messenger</h2>
+
+<input id="ip" placeholder="Enter peer IP (192.168.x.x)">
+<button onclick="connect()">Connect</button>
+
+<div id="chat"></div>
+
+<input id="msg" placeholder="Type message">
+<button onclick="sendMsg()">Send</button>
+
+<hr>
+
+<input type="file" id="file">
+<button onclick="upload()">Send File</button>
+<button onclick="loadFiles()">Refresh Files</button>
+
+<div id="files">
+    <b>Shared Files:</b>
+    <ul id="fileList"></ul>
+</div>
+
+<script>
+let ws = null;
+let peerIP = "";
+
+// Connect
+function connect() {
+    peerIP = document.getElementById("ip").value;
+
+    // Close old connection if exists
+    if (ws) {
+        ws.close();
+    }
+
+    ws = new WebSocket(`ws://${peerIP}:5000/ws`);
+
+    ws.onopen = () => {
+        addMsg("✅ Connected to " + peerIP);
+    };
+
+    ws.onmessage = (e) => {
+        addMsg("Peer: " + e.data);
+    };
+
+    ws.onerror = () => {
+        addMsg("❌ Connection error");
+    };
+
+    ws.onclose = () => {
+        addMsg("⚠ Disconnected");
+    };
+}
+
+// Send message
+function sendMsg() {
+    let input = document.getElementById("msg");
+
+    if (ws && ws.readyState === WebSocket.OPEN && input.value) {
+        ws.send(input.value);
+        addMsg("You: " + input.value);
+        input.value = "";
+    }
+}
+
+// Add message
+function addMsg(msg) {
+    let chat = document.getElementById("chat");
+    chat.innerHTML += `<div>${msg}</div>`;
+    chat.scrollTop = chat.scrollHeight;
+}
+
+// Upload file
+function upload() {
+    let file = document.getElementById("file").files[0];
+
+    if (!file) {
+        alert("Select a file");
+        return;
+    }
+
+    let formData = new FormData();
+    formData.append("file", file);
+
+    fetch(`http://${peerIP}:5000/upload`, {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Uploaded: " + data.filename);
+        loadFiles();
+    })
+    .catch(() => alert("Upload failed"));
+}
+
+// Load file list
+function loadFiles() {
+    fetch(`http://${peerIP}:5000/files`)
+    .then(res => res.json())
+    .then(data => {
+        let list = document.getElementById("fileList");
+        list.innerHTML = "";
+
+        data.files.forEach(file => {
+            let li = document.createElement("li");
+
+            let link = document.createElement("a");
+            link.href = `http://${peerIP}:5000/download/${file}`;
+            link.innerText = file;
+            link.target = "_blank";
+
+            li.appendChild(link);
+            list.appendChild(li);
+        });
+    });
+}
+</script>
+
+</body>
+</html>
